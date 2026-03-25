@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, FlatList, ScrollView, Modal, TextInput, Alert, ActivityIndicator, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, FlatList, ScrollView, Modal, TextInput, Alert, ActivityIndicator, Platform, KeyboardAvoidingView } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -171,38 +171,37 @@ export default function TimetableScreen() {
       </TouchableOpacity>
 
       <Modal animationType="slide" transparent={true} visible={modalVisible} onRequestClose={() => setModalVisible(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalView}>
-            <Text style={styles.modalTitle}>Add Class to {selectedDay}</Text>
-            
-            <TextInput style={styles.input} placeholder="Subject Name" placeholderTextColor="#9CA3AF" value={newSubject} onChangeText={setNewSubject} />
-            
-            <View style={styles.inputRow}>
-              <TextInput style={[styles.input, { flex: 1, marginRight: 5 }]} placeholder="Start (09:00 AM)" placeholderTextColor="#9CA3AF" value={newStartTime} onChangeText={setNewStartTime} />
-              <TextInput style={[styles.input, { flex: 1, marginLeft: 5 }]} placeholder="End (10:00 AM)" placeholderTextColor="#9CA3AF" value={newEndTime} onChangeText={setNewEndTime} />
-            </View>
-
-            <TextInput style={styles.input} placeholder="Room / Lab Number" placeholderTextColor="#9CA3AF" value={newRoom} onChangeText={setNewRoom} />
-
-            <View style={styles.typeSelector}>
-              <TouchableOpacity style={[styles.typeBtn, newType === 'Lecture' && styles.typeActiveBlue]} onPress={() => setNewType('Lecture')}>
-                <Text style={[styles.buttonText, newType === 'Lecture' ? {color: '#2563EB'} : {color: '#6B7280'}]}>Theory</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.typeBtn, newType === 'Lab' && styles.typeActiveOrange]} onPress={() => setNewType('Lab')}>
-                <Text style={[styles.buttonText, newType === 'Lab' ? {color: '#D97706'} : {color: '#6B7280'}]}>Lab</Text>
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.modalButtons}>
-              <TouchableOpacity style={[styles.modalBtn, styles.cancelBtn]} onPress={() => setModalVisible(false)}>
-                <Text style={[styles.buttonText, {color: '#4B5563'}]}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.modalBtn, styles.saveBtn]} onPress={addClass}>
-                <Text style={[styles.buttonText, {color: 'white'}]}>Save</Text>
-              </TouchableOpacity>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalView}>
+              <Text style={styles.modalTitle}>Add Class to {selectedDay}</Text>
+              <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+                <TextInput style={styles.input} placeholder="Subject Name" placeholderTextColor="#9CA3AF" value={newSubject} onChangeText={setNewSubject} />
+                <View style={styles.inputRow}>
+                  <TextInput style={[styles.input, { flex: 1, marginRight: 5 }]} placeholder="Start (09:00 AM)" placeholderTextColor="#9CA3AF" value={newStartTime} onChangeText={setNewStartTime} />
+                  <TextInput style={[styles.input, { flex: 1, marginLeft: 5 }]} placeholder="End (10:00 AM)" placeholderTextColor="#9CA3AF" value={newEndTime} onChangeText={setNewEndTime} />
+                </View>
+                <TextInput style={styles.input} placeholder="Room / Lab Number" placeholderTextColor="#9CA3AF" value={newRoom} onChangeText={setNewRoom} />
+                <View style={styles.typeSelector}>
+                  <TouchableOpacity style={[styles.typeBtn, newType === 'Lecture' && styles.typeActiveBlue]} onPress={() => setNewType('Lecture')}>
+                    <Text style={[styles.buttonText, newType === 'Lecture' ? {color: '#2563EB'} : {color: '#6B7280'}]}>Theory</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={[styles.typeBtn, newType === 'Lab' && styles.typeActiveOrange]} onPress={() => setNewType('Lab')}>
+                    <Text style={[styles.buttonText, newType === 'Lab' ? {color: '#D97706'} : {color: '#6B7280'}]}>Lab</Text>
+                  </TouchableOpacity>
+                </View>
+                <View style={styles.modalButtons}>
+                  <TouchableOpacity style={[styles.modalBtn, styles.cancelBtn]} onPress={() => setModalVisible(false)}>
+                    <Text style={[styles.buttonText, {color: '#4B5563'}]}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={[styles.modalBtn, styles.saveBtn]} onPress={addClass}>
+                    <Text style={[styles.buttonText, {color: 'white'}]}>Save</Text>
+                  </TouchableOpacity>
+                </View>
+              </ScrollView>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
