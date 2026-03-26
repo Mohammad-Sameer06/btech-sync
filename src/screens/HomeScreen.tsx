@@ -1,10 +1,11 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Modal, TextInput, Alert, ActivityIndicator, Platform, KeyboardAvoidingView, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getActiveProfileId, scopedKey } from '../utils/profileService';
+import { useCustomAlert } from '../components/CustomAlert';
 
 type Subject = {
   id: string;
@@ -23,13 +24,9 @@ export default function HomeScreen() {
   const [viewMode, setViewMode] = useState<'Today' | 'All'>('Today'); // New toggle state
   const [isLoaded, setIsLoaded] = useState(false);
   
-  const insets = useSafeAreaInsets(); 
+  const insets = useSafeAreaInsets();
+  const { showAlert, CustomAlert } = useCustomAlert();
 
-  const [modalVisible, setModalVisible] = useState(false);
-  const [newName, setNewName] = useState('');
-  const [newAttended, setNewAttended] = useState('');
-  const [newTotal, setNewTotal] = useState('');
-  const [newType, setNewType] = useState<'Lecture' | 'Lab'>('Lecture');
 
   useFocusEffect(
     useCallback(() => {
@@ -86,7 +83,7 @@ export default function HomeScreen() {
 
   const handleLogClass = (id: string, status: 'Present' | 'Absent' | 'Cancelled') => {
     if (status === 'Cancelled') {
-      Alert.alert('Class Cancelled 🚫', 'Enjoy the free time! Math remains untouched.');
+      showAlert({ type: 'info', title: 'Class Cancelled 🚫', message: 'Enjoy the free time! Your attendance math stays untouched.' });
       return;
     }
 
@@ -104,39 +101,17 @@ export default function HomeScreen() {
     saveSubjects(updatedSubjects);
   };
 
-  const addSubject = () => {
-    if (!newName.trim()) {
-      Alert.alert('Hold up', 'Please enter a subject name.');
-      return;
-    }
-
-    const attended = parseInt(newAttended) || 0;
-    const total = parseInt(newTotal) || 0;
-
-    if (attended > total) {
-      Alert.alert('Math Error', 'Attended cannot be greater than Total!');
-      return;
-    }
-
-    const newSubject: Subject = {
-      id: Date.now().toString(),
-      name: newName.trim(),
-      attended,
-      total,
-      type: newType,
-    };
-
-    saveSubjects([...subjects, newSubject]);
-    
-    setModalVisible(false);
-    setNewName(''); setNewAttended(''); setNewTotal(''); setNewType('Lecture');
-  };
 
   const deleteSubject = (id: string) => {
-    Alert.alert('Delete Subject', 'Are you sure you want to drop this class?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: () => saveSubjects(subjects.filter(sub => sub.id !== id)) },
-    ]);
+    showAlert({
+      type: 'delete',
+      title: 'Drop This Subject?',
+      message: 'This will remove the subject and all its attendance data.',
+      buttons: [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: () => saveSubjects(subjects.filter(sub => sub.id !== id)) },
+      ],
+    });
   };
 
   const calculatePercentage = (attended: number, total: number) => {
@@ -208,6 +183,8 @@ export default function HomeScreen() {
     );
   };
 
+  const navigation = useNavigation<any>();
+
   if (!isLoaded) return <View style={[styles.container, { justifyContent: 'center' }]}><ActivityIndicator size="large" color="#10B981" /></View>;
 
   return (
@@ -261,49 +238,13 @@ export default function HomeScreen() {
           <View style={styles.emptyState}>
             <Ionicons name={viewMode === 'Today' ? "calendar-clear-outline" : "book-outline"} size={48} color="#D1D5DB" />
             <Text style={styles.emptyText}>
-              {viewMode === 'Today' ? "No classes scheduled for today! 🎉" : "No subjects added yet."}
+              {viewMode === 'Today' ? "No classes today! 🎉" : "Go to Timetable tab to add your classes."}
             </Text>
           </View>
         }
       />
 
-      <TouchableOpacity style={styles.fab} onPress={() => setModalVisible(true)}>
-        <Ionicons name="add" size={32} color="white" />
-      </TouchableOpacity>
-
-      {/* Modal is unchanged */}
-      <Modal animationType="slide" transparent={true} visible={modalVisible} onRequestClose={() => setModalVisible(false)}>
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalView}>
-              <Text style={styles.modalTitle}>Add New Subject</Text>
-              <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-                <TextInput style={styles.input} placeholder="Subject Name" placeholderTextColor="#9CA3AF" value={newName} onChangeText={setNewName} />
-                <View style={styles.inputRow}>
-                  <TextInput style={[styles.input, { flex: 1, marginRight: 5 }]} placeholder="Attended (Optional)" placeholderTextColor="#9CA3AF" keyboardType="numeric" value={newAttended} onChangeText={setNewAttended} />
-                  <TextInput style={[styles.input, { flex: 1, marginLeft: 5 }]} placeholder="Total (Optional)" placeholderTextColor="#9CA3AF" keyboardType="numeric" value={newTotal} onChangeText={setNewTotal} />
-                </View>
-                <View style={styles.typeSelector}>
-                  <TouchableOpacity style={[styles.typeBtn, newType === 'Lecture' && styles.typeActiveBlue]} onPress={() => setNewType('Lecture')}>
-                    <Text style={[styles.buttonText, newType === 'Lecture' ? {color: '#2563EB'} : {color: '#6B7280'}]}>Theory</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={[styles.typeBtn, newType === 'Lab' && styles.typeActiveOrange]} onPress={() => setNewType('Lab')}>
-                    <Text style={[styles.buttonText, newType === 'Lab' ? {color: '#D97706'} : {color: '#6B7280'}]}>Lab</Text>
-                  </TouchableOpacity>
-                </View>
-                <View style={styles.modalButtons}>
-                  <TouchableOpacity style={[styles.modalBtn, styles.cancelBtn]} onPress={() => setModalVisible(false)}>
-                    <Text style={[styles.buttonText, {color: '#4B5563'}]}>Cancel</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={[styles.modalBtn, styles.saveBtn]} onPress={addSubject}>
-                    <Text style={[styles.buttonText, {color: 'white'}]}>Save Subject</Text>
-                  </TouchableOpacity>
-                </View>
-              </ScrollView>
-            </View>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
+      <CustomAlert />
     </View>
   );
 }

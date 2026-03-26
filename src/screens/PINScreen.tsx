@@ -6,6 +6,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { verifyPIN, setActiveProfile, Profile } from '../utils/profileService';
+import { wp, hp, nfs, SCREEN_WIDTH } from '../utils/responsive';
 
 const AVATAR_COLORS = ['#6366F1', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#14B8A6'];
 const getAvatarColor = (id: string) => AVATAR_COLORS[parseInt(id) % AVATAR_COLORS.length];
@@ -124,32 +125,33 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F3F4F6', alignItems: 'center' },
   backBtn: { alignSelf: 'flex-start', marginLeft: 16, marginTop: 10, padding: 8 },
 
-  profileSection: { alignItems: 'center', marginTop: 20, marginBottom: 36 },
-  avatar: { width: 80, height: 80, borderRadius: 40, alignItems: 'center', justifyContent: 'center', marginBottom: 14 },
-  avatarText: { fontSize: 34, fontWeight: '800', color: '#FFFFFF' },
-  profileName: { fontSize: 24, fontWeight: '800', color: '#111827', marginBottom: 4 },
-  profileMeta: { fontSize: 14, color: '#9CA3AF', fontWeight: '500', marginBottom: 12 },
-  prompt: { fontSize: 16, color: '#6B7280', fontWeight: '600' },
+  profileSection: { alignItems: 'center', marginTop: hp(20), marginBottom: hp(28) },
+  avatar: { width: wp(72), height: wp(72), borderRadius: wp(36), alignItems: 'center', justifyContent: 'center', marginBottom: hp(12) },
+  avatarText: { fontSize: nfs(30), fontWeight: '800', color: '#FFFFFF' },
+  profileName: { fontSize: nfs(22), fontWeight: '800', color: '#111827', marginBottom: 4 },
+  profileMeta: { fontSize: nfs(13), color: '#9CA3AF', fontWeight: '500', marginBottom: 10 },
+  prompt: { fontSize: nfs(15), color: '#6B7280', fontWeight: '600' },
 
-  dotsRow: { flexDirection: 'row', gap: 18, marginBottom: 12 },
+  dotsRow: { flexDirection: 'row', gap: wp(16), marginBottom: hp(10) },
   dot: {
-    width: 18, height: 18, borderRadius: 9,
+    width: wp(16), height: wp(16), borderRadius: wp(8),
     borderWidth: 2, borderColor: '#D1D5DB', backgroundColor: 'transparent',
   },
   dotFilled: { backgroundColor: '#111827', borderColor: '#111827' },
   dotError: { backgroundColor: '#EF4444', borderColor: '#EF4444' },
-  errorText: { color: '#EF4444', fontSize: 14, fontWeight: '600', marginBottom: 8 },
+  errorText: { color: '#EF4444', fontSize: nfs(13), fontWeight: '600', marginBottom: 8 },
 
-  keypad: { width: '80%', marginTop: 20 },
-  keyRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 16 },
+  keypad: { width: SCREEN_WIDTH * 0.82, marginTop: hp(16) },
+  keyRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: hp(14) },
   key: {
-    width: 76, height: 76, borderRadius: 38,
+    width: SCREEN_WIDTH * 0.22, height: SCREEN_WIDTH * 0.22,
+    borderRadius: SCREEN_WIDTH * 0.11,
     backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center',
     ...Platform.select({
       ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 4 },
       android: { elevation: 2 },
     }),
   },
-  keyPlaceholder: { width: 76, height: 76 },
-  keyDigit: { fontSize: 28, fontWeight: '600', color: '#111827' },
+  keyPlaceholder: { width: SCREEN_WIDTH * 0.22, height: SCREEN_WIDTH * 0.22 },
+  keyDigit: { fontSize: nfs(26), fontWeight: '600', color: '#111827' },
 });

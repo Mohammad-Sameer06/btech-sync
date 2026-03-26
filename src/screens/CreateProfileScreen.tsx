@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity,
-  ScrollView, Alert, ActivityIndicator, Platform,
+  ScrollView, ActivityIndicator, Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createProfile } from '../utils/profileService';
+import { nfs, hp } from '../utils/responsive';
+import { useCustomAlert } from '../components/CustomAlert';
 
 const YEARS = ['1st Year', '2nd Year', '3rd Year', '4th Year'];
 const BRANCHES = ['CSE', 'ECE', 'ME', 'CE', 'EEE', 'IT', 'Other'];
@@ -14,6 +16,7 @@ type Props = { navigation: any };
 
 export default function CreateProfileScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
+  const { showAlert, CustomAlert } = useCustomAlert();
   const [name, setName] = useState('');
   const [selectedBranch, setSelectedBranch] = useState('');
   const [selectedYear, setSelectedYear] = useState('');
@@ -22,20 +25,23 @@ export default function CreateProfileScreen({ navigation }: Props) {
   const [isLoading, setIsLoading] = useState(false);
 
   const handleCreate = async () => {
-    if (!name.trim()) return Alert.alert('Oops!', 'Please enter your name.');
-    if (!selectedBranch) return Alert.alert('Oops!', 'Please select your branch.');
-    if (!selectedYear) return Alert.alert('Oops!', 'Please select your year.');
-    if (pin.length !== 4) return Alert.alert('Oops!', 'Your PIN must be exactly 4 digits.');
-    if (pin !== confirmPin) return Alert.alert('Oops!', 'PINs do not match. Try again!');
+    if (!name.trim()) return showAlert({ type: 'warning', title: 'Missing Name', message: 'Please enter your name to continue.' });
+    if (!selectedBranch) return showAlert({ type: 'warning', title: 'Select Branch', message: 'Please select your branch.' });
+    if (!selectedYear) return showAlert({ type: 'warning', title: 'Select Year', message: 'Please select your year.' });
+    if (pin.length !== 4) return showAlert({ type: 'warning', title: 'Invalid PIN', message: 'Your PIN must be exactly 4 digits.' });
+    if (pin !== confirmPin) return showAlert({ type: 'error', title: 'PIN Mismatch', message: 'The PINs you entered do not match. Please try again.' });
 
     setIsLoading(true);
     try {
       await createProfile(name, selectedBranch, selectedYear, pin);
-      Alert.alert('Profile Created! 🎉', `Welcome, ${name.trim()}! You can now log in with your PIN.`, [
-        { text: 'Let\'s Go!', onPress: () => navigation.goBack() },
-      ]);
+      showAlert({
+        type: 'success',
+        title: `Welcome, ${name.trim()}! 🎉`,
+        message: 'Your profile has been created. You can now log in with your PIN.',
+        buttons: [{ text: "Let's Go!", onPress: () => navigation.goBack() }],
+      });
     } catch (e) {
-      Alert.alert('Error', 'Failed to create profile. Please try again.');
+      showAlert({ type: 'error', title: 'Error', message: 'Failed to create profile. Please try again.' });
     } finally {
       setIsLoading(false);
     }
@@ -128,6 +134,7 @@ export default function CreateProfileScreen({ navigation }: Props) {
           }
         </TouchableOpacity>
       </ScrollView>
+      <CustomAlert />
     </View>
   );
 }
@@ -137,41 +144,41 @@ const styles = StyleSheet.create({
 
   topBar: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingVertical: 14, backgroundColor: '#F3F4F6',
+    paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#F3F4F6',
   },
   backBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
-  topBarTitle: { fontSize: 18, fontWeight: '800', color: '#111827' },
+  topBarTitle: { fontSize: nfs(17), fontWeight: '800', color: '#111827' },
 
-  content: { paddingHorizontal: 20, paddingBottom: 40, paddingTop: 10 },
+  content: { paddingHorizontal: 20, paddingBottom: 40, paddingTop: 8 },
 
-  sectionLabel: { fontSize: 14, fontWeight: '700', color: '#374151', marginBottom: 10, marginTop: 18, textTransform: 'uppercase', letterSpacing: 0.5 },
+  sectionLabel: { fontSize: nfs(12), fontWeight: '700', color: '#374151', marginBottom: 8, marginTop: hp(16), textTransform: 'uppercase', letterSpacing: 0.5 },
 
   input: {
-    backgroundColor: '#FFFFFF', color: '#1F2937', borderRadius: 16, padding: 16,
-    fontSize: 18, fontWeight: '500',
+    backgroundColor: '#FFFFFF', color: '#1F2937', borderRadius: 16, padding: 14,
+    fontSize: nfs(16), fontWeight: '500',
     ...Platform.select({
       ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 2 },
       android: { elevation: 1 },
     }),
   },
 
-  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: {
-    paddingVertical: 10, paddingHorizontal: 18, borderRadius: 12,
+    paddingVertical: 9, paddingHorizontal: 16, borderRadius: 12,
     backgroundColor: '#FFFFFF', borderWidth: 1.5, borderColor: '#E5E7EB',
   },
   chipActive: { backgroundColor: '#ECFDF5', borderColor: '#10B981' },
-  chipText: { fontSize: 14, fontWeight: '600', color: '#6B7280' },
+  chipText: { fontSize: nfs(13), fontWeight: '600', color: '#6B7280' },
   chipTextActive: { color: '#059669' },
 
   createBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
     gap: 10, backgroundColor: '#10B981', borderRadius: 18,
-    padding: 18, marginTop: 32,
+    padding: 16, marginTop: hp(28),
     ...Platform.select({
       ios: { shadowColor: '#10B981', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 6 },
       android: { elevation: 5 },
     }),
   },
-  createBtnText: { color: 'white', fontSize: 17, fontWeight: '800' },
+  createBtnText: { color: 'white', fontSize: nfs(16), fontWeight: '800' },
 });

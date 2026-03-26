@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, FlatList, Alert, Modal, Platform, Switch } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, FlatList, Modal, Platform, Switch } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import * as Notifications from 'expo-notifications';
 import { useNavigation } from '@react-navigation/native';
 import { getActiveProfile, getActiveProfileId, clearActiveProfile, scopedKey, Profile } from '../utils/profileService';
+import { useCustomAlert } from '../components/CustomAlert';
 
 type Subject = { id: string; name: string; attended: number; total: number; };
 
@@ -18,6 +19,8 @@ export default function SettingsScreen() {
   const navigation = useNavigation<any>();
   const [activeProfile, setActiveProfile] = useState<Profile | null>(null);
   const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [showDanger, setShowDanger] = useState(false);
+  const { showAlert, CustomAlert } = useCustomAlert();
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [editingSubjectId, setEditingSubjectId] = useState<string | null>(null);
   const [dailyReminder, setDailyReminder] = useState(false);
@@ -56,7 +59,7 @@ export default function SettingsScreen() {
     if (value) {
       const { status } = await Notifications.requestPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Permission Denied', 'We need notification permissions to remind you!');
+        showAlert({ type: 'warning', title: 'Permission Denied', message: 'We need notification permissions to send you daily reminders!' });
         return;
       }
     }
@@ -68,7 +71,7 @@ export default function SettingsScreen() {
     if (value) {
       const { status } = await Notifications.requestPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Permission Denied', 'We need notification permissions to alert you before class!');
+        showAlert({ type: 'warning', title: 'Permission Denied', message: 'We need notification permissions to alert you before class!' });
         return;
       }
     }
@@ -98,26 +101,31 @@ export default function SettingsScreen() {
       if (!profileId) return;
       await AsyncStorage.setItem(scopedKey(BASE_ATTENDANCE_KEY, profileId), JSON.stringify(subjects));
       setHasUnsavedChanges(false);
-      Alert.alert('Synced ✨', 'Your exact attendance records have been permanently saved.');
-    } catch (e) { Alert.alert('Error', 'Failed to save manually.'); }
+      showAlert({ type: 'success', title: 'Saved! ✨', message: 'Your exact attendance records have been permanently saved.' });
+    } catch (e) { showAlert({ type: 'error', title: 'Save Failed', message: 'Something went wrong. Please try again.' }); }
   };
 
   const handleSwitchProfile = () => {
-    Alert.alert('Switch Profile', 'Are you sure you want to switch to a different profile?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Switch', onPress: async () => {
-          await clearActiveProfile();
-          navigation.replace('ProfileSelect');
-        }
-      },
-    ]);
+    showAlert({
+      type: 'confirm',
+      title: 'Switch Profile?',
+      message: 'You\'ll be taken back to the profile selection screen.',
+      buttons: [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Switch', style: 'default', onPress: async () => { await clearActiveProfile(); navigation.replace('ProfileSelect'); } },
+      ],
+    });
   };
 
   const factoryReset = () => {
-    Alert.alert('⚠️ Wipe All Data', 'This will permanently delete ALL subjects, attendance, and timetable data for THIS profile.', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Wipe Everything', style: 'destructive', onPress: async () => {
+    showAlert({
+      type: 'delete',
+      title: 'Wipe All Data?',
+      message: 'This permanently deletes ALL subjects, attendance & timetable data for this profile. Cannot be undone.',
+      buttons: [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Wipe Everything', style: 'destructive', onPress: async () => {
             const profileId = await getActiveProfileId();
             if (profileId) {
               await AsyncStorage.removeItem(scopedKey(BASE_ATTENDANCE_KEY, profileId));
@@ -126,10 +134,11 @@ export default function SettingsScreen() {
             }
             setSubjects([]); setHasUnsavedChanges(false);
             setDailyReminder(false); setClassAlerts(false);
-            Alert.alert('Reset Complete', 'Your app is a clean slate.');
-          }
-      }
-    ]);
+            showAlert({ type: 'success', title: 'Clean Slate', message: 'All data has been wiped. Fresh start!' });
+          },
+        },
+      ],
+    });
   };
 
   const getPercentage = (attended: number, total: number) => {
@@ -245,12 +254,23 @@ export default function SettingsScreen() {
         <TouchableOpacity style={styles.resetBtn} onPress={handleSwitchProfile}>
           <Text style={styles.switchBtnText}>⇄ Switch Profile</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.resetBtn} onPress={factoryReset}>
-          <Text style={styles.resetBtnText}>Wipe My Data</Text>
+
+        {/* Danger Zone — collapsed by default */}
+        <TouchableOpacity
+          style={[styles.dangerZoneToggle, showDanger && styles.dangerZoneToggleOpen]}
+          onPress={() => setShowDanger(v => !v)}
+        >
+          <Text style={styles.dangerZoneToggleText}>{showDanger ? '▲' : '▼'}  Danger Zone</Text>
         </TouchableOpacity>
+        {showDanger && (
+          <TouchableOpacity style={styles.resetBtn} onPress={factoryReset}>
+            <Text style={styles.resetBtnText}>🗑 Wipe My Data</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
-      {/* Editing Modal (Unchanged) */}
+      {/* Editing Modal */}
+      <CustomAlert />
       <Modal animationType="slide" transparent={true} visible={!!editingSubjectId} onRequestClose={() => setEditingSubjectId(null)}>
         <View style={styles.modalOverlay}>
           {activeSubject && (
@@ -347,6 +367,9 @@ const styles = StyleSheet.create({
   resetBtn: { padding: 15, alignItems: 'center', justifyContent: 'center' },
   resetBtnText: { color: '#EF4444', fontWeight: 'bold', fontSize: 15 },
   switchBtnText: { color: '#6366F1', fontWeight: 'bold', fontSize: 15 },
+  dangerZoneToggle: { marginHorizontal: 20, marginTop: 4, padding: 12, borderRadius: 12, borderWidth: 1.5, borderColor: '#FECACA', backgroundColor: '#FFF5F5', alignItems: 'center' },
+  dangerZoneToggleOpen: { borderColor: '#EF4444', backgroundColor: '#FEE2E2' },
+  dangerZoneToggleText: { color: '#EF4444', fontWeight: '700', fontSize: 13 },
 
   modalOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' },
   modalContent: { backgroundColor: '#FFFFFF', borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 25, paddingBottom: 40 },

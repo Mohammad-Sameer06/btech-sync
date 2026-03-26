@@ -8,6 +8,7 @@ import ProfileSelectScreen from '../screens/ProfileSelectScreen';
 import CreateProfileScreen from '../screens/CreateProfileScreen';
 import PINScreen from '../screens/PINScreen';
 import BottomTabNavigator from './BottomTabNavigator';
+import QuickAddScreen from '../screens/QuickAddScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -39,6 +40,7 @@ export default function RootNavigator() {
         <Stack.Screen name="CreateProfile" component={CreateProfileScreen} options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="PINEntry" component={PINScreen} options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="MainApp" component={BottomTabNavigator} options={{ animation: 'fade' }} />
+        <Stack.Screen name="QuickAdd" component={QuickAddScreen} options={{ animation: 'slide_from_bottom', headerShown: false }} />
       </Stack.Navigator>
     </NavigationContainer>
   );

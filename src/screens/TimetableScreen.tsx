@@ -1,30 +1,40 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, FlatList, ScrollView, Modal, TextInput, Alert, ActivityIndicator, Platform, KeyboardAvoidingView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, FlatList, ScrollView, Modal, TextInput, ActivityIndicator, Platform, KeyboardAvoidingView, useWindowDimensions } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { scheduleClassAlarm, cancelAlarm } from '../utils/notifications';
 import { getActiveProfileId, scopedKey } from '../utils/profileService';
+import { useCustomAlert } from '../components/CustomAlert';
 
 type ClassSession = { id: string; time: string; subject: string; type: 'Lecture' | 'Lab'; room: string; notificationId?: string; };
+type Subject = { id: string; name: string; attended: number; total: number; type: 'Lecture' | 'Lab' };
 const SETTINGS_KEY = '@app_settings';
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const BASE_TIMETABLE_KEY = '@timetable_data';
+const BASE_ATTENDANCE_KEY = '@attendance_data';
 
 export default function TimetableScreen() {
   const [selectedDay, setSelectedDay] = useState('Mon');
   const [schedule, setSchedule] = useState<Record<string, ClassSession[]>>({ 'Mon': [], 'Tue': [], 'Wed': [], 'Thu': [], 'Fri': [], 'Sat': [] });
   const [isLoaded, setIsLoaded] = useState(false);
 
-  const insets = useSafeAreaInsets(); // Getting the phone's exact top margin
+  const insets = useSafeAreaInsets();
+  const { height: screenHeight, width: screenWidth } = useWindowDimensions();
+  const { showAlert, CustomAlert } = useCustomAlert();
 
   const [modalVisible, setModalVisible] = useState(false);
   const [newSubject, setNewSubject] = useState('');
-  const [newStartTime, setNewStartTime] = useState('');
-  const [newEndTime, setNewEndTime] = useState('');
   const [newRoom, setNewRoom] = useState('');
   const [newType, setNewType] = useState<'Lecture' | 'Lab'>('Lecture');
+  // Time picker state
+  const [startHour, setStartHour] = useState(9);
+  const [startMinute, setStartMinute] = useState(0);
+  const [startAmPm, setStartAmPm] = useState<'AM' | 'PM'>('AM');
+  const [endHour, setEndHour] = useState(10);
+  const [endMinute, setEndMinute] = useState(0);
+  const [endAmPm, setEndAmPm] = useState<'AM' | 'PM'>('AM');
 
   useFocusEffect(
     useCallback(() => {
@@ -51,54 +61,76 @@ export default function TimetableScreen() {
     } catch (e) { console.error('Failed to save timetable', e); }
   };
 
+  const fmt = (h: number, m: number, ap: string) =>
+    `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')} ${ap}`;
+  const adjHour = (cur: number, d: number) => { let n = cur + d; if (n < 1) n = 12; if (n > 12) n = 1; return n; };
+  const adjMin = (cur: number, d: number) => { let n = cur + d; if (n < 0) n = 55; if (n > 55) n = 0; return n; };
+
   const addClass = async () => {
-    if (!newSubject.trim() || !newStartTime.trim() || !newEndTime.trim() || !newRoom.trim()) {
-      Alert.alert('Missing Info', 'Please fill out all the fields!');
+    if (!newSubject.trim() || !newRoom.trim()) {
+      showAlert({ type: 'warning', title: 'Missing Info', message: 'Please enter both a subject name and room number.' });
       return;
     }
 
-    let alarmId = undefined;
+    const profileId = await getActiveProfileId();
+    if (!profileId) return;
 
-    // Check if the user wants alerts
+    const startTimeStr = fmt(startHour, startMinute, startAmPm);
+    const endTimeStr = fmt(endHour, endMinute, endAmPm);
+
+    let alarmId = undefined;
     const settingsStr = await AsyncStorage.getItem(SETTINGS_KEY);
     if (settingsStr) {
       const settings = JSON.parse(settingsStr);
       if (settings.classAlerts) {
-        // Trigger our time-math engine
-        alarmId = await scheduleClassAlarm(newSubject.trim(), newStartTime, selectedDay, newRoom.trim());
+        alarmId = await scheduleClassAlarm(newSubject.trim(), startTimeStr, selectedDay, newRoom.trim());
       }
     }
 
-    const newClass: ClassSession = { 
-      id: Date.now().toString(), 
-      time: `${newStartTime.trim()} - ${newEndTime.trim()}`, 
-      subject: newSubject.trim(), 
-      type: newType, 
+    const newClass: ClassSession = {
+      id: Date.now().toString(),
+      time: `${startTimeStr} - ${endTimeStr}`,
+      subject: newSubject.trim(),
+      type: newType,
       room: newRoom.trim(),
-      notificationId: alarmId // Save the ghost ID here
+      notificationId: alarmId,
     };
 
     const newSchedule = { ...schedule, [selectedDay]: [...(schedule[selectedDay] || []), newClass] };
     saveTimetable(newSchedule);
-    
+
+    // Auto-sync subject to attendance if not already there
+    try {
+      const attRaw = await AsyncStorage.getItem(scopedKey(BASE_ATTENDANCE_KEY, profileId));
+      const attArr: Subject[] = attRaw ? JSON.parse(attRaw) : [];
+      const exists = attArr.some(s => s.name.toLowerCase().trim() === newSubject.toLowerCase().trim());
+      if (!exists) {
+        attArr.push({ id: `${Date.now()}_att`, name: newSubject.trim(), attended: 0, total: 0, type: newType });
+        await AsyncStorage.setItem(scopedKey(BASE_ATTENDANCE_KEY, profileId), JSON.stringify(attArr));
+      }
+    } catch (e) { console.error('Auto-sync attendance failed', e); }
+
     setModalVisible(false);
-    setNewSubject(''); setNewStartTime(''); setNewEndTime(''); setNewRoom(''); setNewType('Lecture');
+    setNewSubject(''); setNewRoom(''); setNewType('Lecture');
+    setStartHour(9); setStartMinute(0); setStartAmPm('AM');
+    setEndHour(10); setEndMinute(0); setEndAmPm('AM');
   };
 
   const deleteClass = (id: string, notificationId?: string) => {
-    Alert.alert('Remove Class', 'Are you sure you want to remove this class from your schedule?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Remove', style: 'destructive', onPress: () => {
-          // 1. Kill the alarm first
-          if (notificationId) {
-            cancelAlarm(notificationId);
+    showAlert({
+      type: 'delete',
+      title: 'Remove This Class?',
+      message: 'This class will be removed from your weekly schedule.',
+      buttons: [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Remove', style: 'destructive', onPress: () => {
+            if (notificationId) cancelAlarm(notificationId);
+            const newSchedule = { ...schedule, [selectedDay]: schedule[selectedDay].filter(c => c.id !== id) };
+            saveTimetable(newSchedule);
           }
-          // 2. Remove it from the UI and memory
-          const newSchedule = { ...schedule, [selectedDay]: schedule[selectedDay].filter(c => c.id !== id) };
-          saveTimetable(newSchedule);
-        }
-      }
-    ]);
+        },
+      ],
+    });
   };
 
   const renderDayTab = (day: string) => {
@@ -170,17 +202,51 @@ export default function TimetableScreen() {
         <Ionicons name="add" size={32} color="white" />
       </TouchableOpacity>
 
-      <Modal animationType="slide" transparent={true} visible={modalVisible} onRequestClose={() => setModalVisible(false)}>
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+      <CustomAlert />
+
+      <Modal animationType="slide" transparent statusBarTranslucent visible={modalVisible} onRequestClose={() => setModalVisible(false)}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={{ flex: 1 }}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+        >
           <View style={styles.modalOverlay}>
-            <View style={styles.modalView}>
+            <View style={[styles.modalView, { maxHeight: screenHeight * 0.85, paddingBottom: insets.bottom + 16 }]}>
+              <View style={styles.modalHandle} />
               <Text style={styles.modalTitle}>Add Class to {selectedDay}</Text>
-              <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+              <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" bounces={false}>
                 <TextInput style={styles.input} placeholder="Subject Name" placeholderTextColor="#9CA3AF" value={newSubject} onChangeText={setNewSubject} />
-                <View style={styles.inputRow}>
-                  <TextInput style={[styles.input, { flex: 1, marginRight: 5 }]} placeholder="Start (09:00 AM)" placeholderTextColor="#9CA3AF" value={newStartTime} onChangeText={setNewStartTime} />
-                  <TextInput style={[styles.input, { flex: 1, marginLeft: 5 }]} placeholder="End (10:00 AM)" placeholderTextColor="#9CA3AF" value={newEndTime} onChangeText={setNewEndTime} />
+
+                {/* Time Picker — Start */}
+                <Text style={styles.timeLabel}>Start Time</Text>
+                <View style={styles.timePickerRow}>
+                  <TouchableOpacity style={styles.timeBtn} onPress={() => setStartHour(h => adjHour(h, -1))}><Text style={styles.timeBtnText}>−</Text></TouchableOpacity>
+                  <Text style={styles.timeValue}>{String(startHour).padStart(2,'0')}</Text>
+                  <TouchableOpacity style={styles.timeBtn} onPress={() => setStartHour(h => adjHour(h, 1))}><Text style={styles.timeBtnText}>+</Text></TouchableOpacity>
+                  <Text style={styles.timeColon}>:</Text>
+                  <TouchableOpacity style={styles.timeBtn} onPress={() => setStartMinute(m => adjMin(m, -5))}><Text style={styles.timeBtnText}>−</Text></TouchableOpacity>
+                  <Text style={styles.timeValue}>{String(startMinute).padStart(2,'0')}</Text>
+                  <TouchableOpacity style={styles.timeBtn} onPress={() => setStartMinute(m => adjMin(m, 5))}><Text style={styles.timeBtnText}>+</Text></TouchableOpacity>
+                  <TouchableOpacity style={styles.amPmBtn} onPress={() => setStartAmPm(a => a === 'AM' ? 'PM' : 'AM')}>
+                    <Text style={styles.amPmText}>{startAmPm}</Text>
+                  </TouchableOpacity>
                 </View>
+
+                {/* Time Picker — End */}
+                <Text style={styles.timeLabel}>End Time</Text>
+                <View style={styles.timePickerRow}>
+                  <TouchableOpacity style={styles.timeBtn} onPress={() => setEndHour(h => adjHour(h, -1))}><Text style={styles.timeBtnText}>−</Text></TouchableOpacity>
+                  <Text style={styles.timeValue}>{String(endHour).padStart(2,'0')}</Text>
+                  <TouchableOpacity style={styles.timeBtn} onPress={() => setEndHour(h => adjHour(h, 1))}><Text style={styles.timeBtnText}>+</Text></TouchableOpacity>
+                  <Text style={styles.timeColon}>:</Text>
+                  <TouchableOpacity style={styles.timeBtn} onPress={() => setEndMinute(m => adjMin(m, -5))}><Text style={styles.timeBtnText}>−</Text></TouchableOpacity>
+                  <Text style={styles.timeValue}>{String(endMinute).padStart(2,'0')}</Text>
+                  <TouchableOpacity style={styles.timeBtn} onPress={() => setEndMinute(m => adjMin(m, 5))}><Text style={styles.timeBtnText}>+</Text></TouchableOpacity>
+                  <TouchableOpacity style={styles.amPmBtn} onPress={() => setEndAmPm(a => a === 'AM' ? 'PM' : 'AM')}>
+                    <Text style={styles.amPmText}>{endAmPm}</Text>
+                  </TouchableOpacity>
+                </View>
+
                 <TextInput style={styles.input} placeholder="Room / Lab Number" placeholderTextColor="#9CA3AF" value={newRoom} onChangeText={setNewRoom} />
                 <View style={styles.typeSelector}>
                   <TouchableOpacity style={[styles.typeBtn, newType === 'Lecture' && styles.typeActiveBlue]} onPress={() => setNewType('Lecture')}>
@@ -239,8 +305,9 @@ const styles = StyleSheet.create({
   fab: { position: 'absolute', width: 60, height: 60, alignItems: 'center', justifyContent: 'center', right: 20, bottom: 25, backgroundColor: '#10B981', borderRadius: 30, ...Platform.select({ ios: { shadowColor: '#10B981', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 5 }, android: { elevation: 6 } }) }, // Fixed bottom padding
 
   modalOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' },
-  modalView: { backgroundColor: '#FFFFFF', borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 25, paddingBottom: 40 },
-  modalTitle: { color: '#111827', fontSize: 22, fontWeight: 'bold', marginBottom: 20, textAlign: 'center' },
+  modalView: { backgroundColor: '#FFFFFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingTop: 12, paddingBottom: 30 },
+  modalHandle: { alignSelf: 'center', width: 36, height: 4, borderRadius: 2, backgroundColor: '#D1D5DB', marginBottom: 14 },
+  modalTitle: { color: '#111827', fontSize: 18, fontWeight: '800', marginBottom: 14, textAlign: 'center' },
   input: { backgroundColor: '#F3F4F6', color: '#1F2937', borderRadius: 14, padding: 16, marginBottom: 15, fontSize: 16, fontWeight: '500' },
   inputRow: { flexDirection: 'row', justifyContent: 'space-between' },
   typeSelector: { flexDirection: 'row', marginBottom: 25, gap: 10 },
@@ -248,6 +315,15 @@ const styles = StyleSheet.create({
   typeActiveBlue: { backgroundColor: '#EFF6FF', borderColor: '#BFDBFE' },
   typeActiveOrange: { backgroundColor: '#FFFBEB', borderColor: '#FDE68A' },
   modalButtons: { flexDirection: 'row', justifyContent: 'space-between', gap: 15 },
+  // Time Picker Styles
+  timeLabel: { fontSize: 11, fontWeight: '700', color: '#6B7280', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6, marginTop: 2 },
+  timePickerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#F9FAFB', borderRadius: 12, paddingVertical: 8, paddingHorizontal: 6, marginBottom: 12, gap: 4, borderWidth: 1, borderColor: '#E5E7EB' },
+  timeBtn: { width: 28, height: 28, borderRadius: 8, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#E5E7EB' },
+  timeBtnText: { fontSize: 16, fontWeight: '600', color: '#374151', lineHeight: 20 },
+  timeValue: { fontSize: 20, fontWeight: '800', color: '#111827', minWidth: 30, textAlign: 'center' },
+  timeColon: { fontSize: 20, fontWeight: '800', color: '#111827' },
+  amPmBtn: { backgroundColor: '#10B981', borderRadius: 8, paddingVertical: 6, paddingHorizontal: 9, marginLeft: 2 },
+  amPmText: { fontSize: 12, fontWeight: '800', color: '#FFFFFF' },
   modalBtn: { flex: 1, padding: 16, borderRadius: 14, alignItems: 'center' },
   cancelBtn: { backgroundColor: '#F3F4F6' },
   saveBtn: { backgroundColor: '#10B981' },

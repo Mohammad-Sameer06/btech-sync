@@ -1,12 +1,14 @@
 import React, { useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
-  Platform, ActivityIndicator, Alert,
+  Platform, ActivityIndicator,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getAllProfiles, deleteProfile, Profile } from '../utils/profileService';
+import { nfs, hp } from '../utils/responsive';
+import { useCustomAlert } from '../components/CustomAlert';
 
 type Props = { navigation: any };
 
@@ -18,6 +20,7 @@ export default function ProfileSelectScreen({ navigation }: Props) {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
   const insets = useSafeAreaInsets();
+  const { showAlert, CustomAlert } = useCustomAlert();
 
   useFocusEffect(
     useCallback(() => {
@@ -31,10 +34,11 @@ export default function ProfileSelectScreen({ navigation }: Props) {
   );
 
   const handleLongPress = (profile: Profile) => {
-    Alert.alert(
-      `Delete "${profile.name}"?`,
-      'This will permanently delete this profile and ALL its attendance & timetable data.',
-      [
+    showAlert({
+      type: 'delete',
+      title: `Delete "${profile.name}"?`,
+      message: 'This will permanently delete this profile and ALL its attendance & timetable data.',
+      buttons: [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Delete', style: 'destructive', onPress: async () => {
@@ -42,8 +46,8 @@ export default function ProfileSelectScreen({ navigation }: Props) {
             setProfiles(prev => prev.filter(p => p.id !== profile.id));
           }
         },
-      ]
-    );
+      ],
+    });
   };
 
   const renderProfile = ({ item }: { item: Profile }) => {
@@ -113,6 +117,7 @@ export default function ProfileSelectScreen({ navigation }: Props) {
         }
       />
       <Text style={styles.hint}>Long press a profile to delete it</Text>
+      <CustomAlert />
     </View>
   );
 }
@@ -123,23 +128,23 @@ const styles = StyleSheet.create({
   header: {
     backgroundColor: '#111827',
     paddingHorizontal: 24,
-    paddingTop: 20,
-    paddingBottom: 32,
-    borderBottomLeftRadius: 32,
-    borderBottomRightRadius: 32,
-    marginBottom: 24,
+    paddingTop: hp(16),
+    paddingBottom: hp(28),
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
+    marginBottom: hp(20),
   },
-  logoRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 20, gap: 8 },
-  logoText: { fontSize: 18, fontWeight: '800', color: '#10B981' },
-  headerTitle: { fontSize: 32, fontWeight: '900', color: '#FFFFFF', lineHeight: 38, marginBottom: 6 },
-  headerSub: { fontSize: 15, color: '#9CA3AF', fontWeight: '500' },
+  logoRow: { flexDirection: 'row', alignItems: 'center', marginBottom: hp(16), gap: 8 },
+  logoText: { fontSize: nfs(17), fontWeight: '800', color: '#10B981' },
+  headerTitle: { fontSize: nfs(28), fontWeight: '900', color: '#FFFFFF', lineHeight: nfs(34), marginBottom: 6 },
+  headerSub: { fontSize: nfs(14), color: '#9CA3AF', fontWeight: '500' },
 
   list: { paddingHorizontal: 20, paddingBottom: 20 },
 
   profileCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 18,
-    padding: 16,
+    padding: 14,
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 12,
@@ -149,28 +154,28 @@ const styles = StyleSheet.create({
     }),
   },
   avatar: {
-    width: 52, height: 52, borderRadius: 26,
+    width: 50, height: 50, borderRadius: 25,
     alignItems: 'center', justifyContent: 'center', marginRight: 14,
   },
-  avatarText: { fontSize: 22, fontWeight: '800', color: '#FFFFFF' },
+  avatarText: { fontSize: nfs(20), fontWeight: '800', color: '#FFFFFF' },
   profileInfo: { flex: 1 },
-  profileName: { fontSize: 18, fontWeight: '700', color: '#111827', marginBottom: 3 },
-  profileMeta: { fontSize: 13, color: '#9CA3AF', fontWeight: '500' },
+  profileName: { fontSize: nfs(16), fontWeight: '700', color: '#111827', marginBottom: 3 },
+  profileMeta: { fontSize: nfs(12), color: '#9CA3AF', fontWeight: '500' },
 
-  emptyState: { alignItems: 'center', paddingVertical: 40 },
-  emptyTitle: { fontSize: 20, fontWeight: '700', color: '#374151', marginTop: 16, marginBottom: 6 },
-  emptySub: { fontSize: 14, color: '#9CA3AF', fontWeight: '500', textAlign: 'center' },
+  emptyState: { alignItems: 'center', paddingVertical: hp(36) },
+  emptyTitle: { fontSize: nfs(18), fontWeight: '700', color: '#374151', marginTop: 16, marginBottom: 6 },
+  emptySub: { fontSize: nfs(13), color: '#9CA3AF', fontWeight: '500', textAlign: 'center' },
 
   addButton: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 8, paddingVertical: 18, borderRadius: 18,
+    gap: 8, paddingVertical: 16, borderRadius: 18,
     borderWidth: 2, borderColor: '#10B981', borderStyle: 'dashed',
     marginTop: 8, backgroundColor: '#F0FDF4',
   },
-  addButtonText: { fontSize: 16, fontWeight: '700', color: '#10B981' },
+  addButtonText: { fontSize: nfs(15), fontWeight: '700', color: '#10B981' },
 
   hint: {
-    textAlign: 'center', color: '#D1D5DB', fontSize: 12,
+    textAlign: 'center', color: '#D1D5DB', fontSize: nfs(11),
     fontWeight: '500', paddingBottom: 16,
   },
 });
