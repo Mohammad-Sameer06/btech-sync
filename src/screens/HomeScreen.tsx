@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Platform } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, ActivityIndicator, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -26,6 +26,21 @@ export default function HomeScreen() {
   
   const insets = useSafeAreaInsets();
   const { showAlert, CustomAlert } = useCustomAlert();
+
+  // Tracks which subject IDs have been logged today (resets daily)
+  const [loggedToday, setLoggedToday] = useState<Set<string>>(new Set());
+  // When non-null: waiting for user to pick a multiplier (1×/2×/3×)
+  const [pendingLog, setPendingLog] = useState<{ id: string; status: 'Present' | 'Absent' } | null>(null);
+  const [customCount, setCustomCount] = useState('');
+
+  // Goal settings (managed in BunkCalculatorScreen)
+  const [bunkLevel] = useState(75); // used only for isSafe colour
+
+  const getTodayKey = (profileId: string) => {
+    const d = new Date();
+    const dateStr = `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+    return `@logged_today_${profileId}_${dateStr}`;
+  };
 
 
   useFocusEffect(
@@ -60,8 +75,13 @@ export default function HomeScreen() {
           } else {
             setTodayClasses([]);
           }
+          // 3. Load today's logged subjects
+          const todayKey = getTodayKey(profileId);
+          const todayRaw = await AsyncStorage.getItem(todayKey);
+          if (todayRaw) setLoggedToday(new Set(JSON.parse(todayRaw)));
         } catch (e) {
           console.error('Failed to load data', e);
+
         } finally {
           setIsLoaded(true);
         }
@@ -81,24 +101,39 @@ export default function HomeScreen() {
     }
   };
 
+  // Step 1: tap Present/Absent → show multiplier picker
   const handleLogClass = (id: string, status: 'Present' | 'Absent' | 'Cancelled') => {
     if (status === 'Cancelled') {
       showAlert({ type: 'info', title: 'Class Cancelled 🚫', message: 'Enjoy the free time! Your attendance math stays untouched.' });
       return;
     }
+    setCustomCount('');
+    setPendingLog({ id, status });
+  };
+
+  // Step 2: user picks multiplier → log and mark as done for today
+  const confirmLog = async (multiplier: number) => {
+    if (!pendingLog) return;
+    const { id, status } = pendingLog;
+    setPendingLog(null);
 
     const updatedSubjects = subjects.map(sub => {
-      if (sub.id === id) {
-        return {
-          ...sub,
-          attended: status === 'Present' ? sub.attended + 1 : sub.attended,
-          total: sub.total + 1,
-        };
-      }
-      return sub;
+      if (sub.id !== id) return sub;
+      return {
+        ...sub,
+        attended: status === 'Present' ? sub.attended + multiplier : sub.attended,
+        total: sub.total + multiplier,
+      };
     });
-
     saveSubjects(updatedSubjects);
+
+    // Persist today's log
+    const profileId = await getActiveProfileId();
+    if (profileId) {
+      const newLogged = new Set(loggedToday).add(id);
+      setLoggedToday(newLogged);
+      await AsyncStorage.setItem(getTodayKey(profileId), JSON.stringify([...newLogged]));
+    }
   };
 
 
@@ -136,9 +171,11 @@ export default function HomeScreen() {
 
   const renderSubject = ({ item }: { item: Subject }) => {
     const percentage = calculatePercentage(item.attended, item.total);
-    const isSafe = parseFloat(percentage as string) >= 75;
-    const typeColor = item.type === 'Lab' ? '#F59E0B' : '#3B82F6'; 
+    const isSafe = parseFloat(percentage as string) >= bunkLevel;
+    const typeColor = item.type === 'Lab' ? '#F59E0B' : '#3B82F6';
     const badgeBg = item.type === 'Lab' ? '#FEF3C7' : '#DBEAFE';
+    const isLogged = loggedToday.has(item.id);
+    const isPending = pendingLog?.id === item.id;
 
     return (
       <View style={styles.card}>
@@ -150,7 +187,7 @@ export default function HomeScreen() {
                 <Text style={[styles.badgeText, { color: typeColor }]}>{item.type}</Text>
               </View>
             </View>
-            
+
             <View style={styles.statsRow}>
               <Text style={styles.stats}>{item.attended}/{item.total}</Text>
               <Text style={[styles.percentage, { color: isSafe ? '#10B981' : '#EF4444' }]}>
@@ -163,22 +200,81 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        <View style={styles.actionBar}>
-          <TouchableOpacity style={[styles.actionBtn, styles.btnPresent]} onPress={() => handleLogClass(item.id, 'Present')}>
-            <Ionicons name="checkmark-circle" size={20} color="#10B981" />
-            <Text style={[styles.actionText, { color: '#10B981' }]}>Present</Text>
-          </TouchableOpacity>
-          <View style={styles.actionDivider} />
-          <TouchableOpacity style={[styles.actionBtn, styles.btnAbsent]} onPress={() => handleLogClass(item.id, 'Absent')}>
-            <Ionicons name="close-circle" size={20} color="#EF4444" />
-            <Text style={[styles.actionText, { color: '#EF4444' }]}>Absent</Text>
-          </TouchableOpacity>
-          <View style={styles.actionDivider} />
-          <TouchableOpacity style={[styles.actionBtn, styles.btnCancelled]} onPress={() => handleLogClass(item.id, 'Cancelled')}>
-            <Ionicons name="ban" size={20} color="#F59E0B" />
-            <Text style={[styles.actionText, { color: '#F59E0B' }]}>Cancel</Text>
-          </TouchableOpacity>
-        </View>
+        {/* ── State 1: Already logged today ── */}
+        {isLogged && (
+          <View style={styles.loggedBar}>
+            <Ionicons name="checkmark-circle" size={18} color="#10B981" />
+            <Text style={styles.loggedText}>Logged for today ✓</Text>
+          </View>
+        )}
+
+        {/* ── State 2: Multiplier picker (pending) ── */}
+        {!isLogged && isPending && (
+          <View style={styles.multiplierBar}>
+            <Text style={styles.multiplierLabel}>How many?</Text>
+            {[1, 2, 3].map(n => (
+              <TouchableOpacity
+                key={n}
+                style={[
+                  styles.multiplierBtn,
+                  pendingLog.status === 'Present' ? styles.multiplierPresent : styles.multiplierAbsent,
+                ]}
+                onPress={() => confirmLog(n)}
+              >
+                <Text style={styles.multiplierBtnText}>{n}/{n}</Text>
+              </TouchableOpacity>
+            ))}
+            {/* Custom input */}
+            <View style={styles.customInputWrap}>
+              <TextInput
+                style={[
+                  styles.customInput,
+                  pendingLog.status === 'Present' ? styles.multiplierPresent : styles.multiplierAbsent,
+                ]}
+                value={customCount}
+                onChangeText={v => setCustomCount(v.replace(/[^0-9]/g, ''))}
+                placeholder="?"
+                placeholderTextColor="#9CA3AF"
+                keyboardType="number-pad"
+                maxLength={2}
+              />
+              {customCount.length > 0 && (
+                <TouchableOpacity
+                  style={styles.customConfirm}
+                  onPress={() => {
+                    const n = parseInt(customCount);
+                    if (n > 0) confirmLog(n);
+                  }}
+                >
+                  <Ionicons name="checkmark" size={16} color="#10B981" />
+                </TouchableOpacity>
+              )}
+            </View>
+            <TouchableOpacity style={styles.multiplierCancel} onPress={() => setPendingLog(null)}>
+              <Ionicons name="close" size={18} color="#9CA3AF" />
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* ── State 3: Normal action buttons ── */}
+        {!isLogged && !isPending && (
+          <View style={styles.actionBar}>
+            <TouchableOpacity style={[styles.actionBtn, styles.btnPresent]} onPress={() => handleLogClass(item.id, 'Present')}>
+              <Ionicons name="checkmark-circle" size={20} color="#10B981" />
+              <Text style={[styles.actionText, { color: '#10B981' }]}>Present</Text>
+            </TouchableOpacity>
+            <View style={styles.actionDivider} />
+            <TouchableOpacity style={[styles.actionBtn, styles.btnAbsent]} onPress={() => handleLogClass(item.id, 'Absent')}>
+              <Ionicons name="close-circle" size={20} color="#EF4444" />
+              <Text style={[styles.actionText, { color: '#EF4444' }]}>Absent</Text>
+            </TouchableOpacity>
+            <View style={styles.actionDivider} />
+            <TouchableOpacity style={[styles.actionBtn, styles.btnCancelled]} onPress={() => handleLogClass(item.id, 'Cancelled')}>
+              <Ionicons name="ban" size={20} color="#F59E0B" />
+              <Text style={[styles.actionText, { color: '#F59E0B' }]}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
     );
   };
@@ -289,6 +385,42 @@ const styles = StyleSheet.create({
   btnCancelled: { backgroundColor: 'rgba(245, 158, 11, 0.08)' },
   actionText: { fontSize: 13, fontWeight: '700' },
   actionDivider: { width: 1, backgroundColor: '#F3F4F6' },
+
+  // Logged today chip
+  loggedBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, backgroundColor: '#F0FDF4', borderTopWidth: 1, borderTopColor: '#D1FAE5' },
+  loggedText: { color: '#059669', fontSize: 13, fontWeight: '700' },
+
+  // Calculator row (inside card)
+  calcRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap', paddingHorizontal: 16, paddingVertical: 10, borderTopWidth: 1, borderTopColor: '#F3F4F6', backgroundColor: '#FAFAFA' },
+  calcChip: { paddingVertical: 4, paddingHorizontal: 8, borderRadius: 8 },
+  calcChipRed: { fontSize: 12, fontWeight: '700', color: '#DC2626' },
+  calcChipGreen: { fontSize: 12, fontWeight: '700', color: '#059669' },
+  calcChipBlue: { fontSize: 12, fontWeight: '700', color: '#2563EB' },
+
+  // Attendance Goals panel
+  goalsHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginHorizontal: 15, marginTop: 2, marginBottom: 4, paddingVertical: 10, paddingHorizontal: 14, backgroundColor: '#EEF2FF', borderRadius: 14 },
+  goalsHeaderText: { fontSize: 13, fontWeight: '700', color: '#4338CA' },
+  goalsPanel: { marginHorizontal: 15, marginBottom: 10, backgroundColor: '#FFFFFF', borderRadius: 14, padding: 14, gap: 10, ...Platform.select({ ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2 }, android: { elevation: 1 } }) },
+  goalRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  goalLabel: { fontSize: 14, fontWeight: '600', color: '#374151', flex: 1 },
+  goalAdj: { width: 34, height: 34, borderRadius: 10, backgroundColor: '#F3F4F6', alignItems: 'center', justifyContent: 'center' },
+  goalAdjText: { fontSize: 18, fontWeight: '700', color: '#374151' },
+  goalValue: { fontSize: 20, fontWeight: '900', color: '#111827', marginHorizontal: 14, minWidth: 50, textAlign: 'center' },
+  goalsHint: { fontSize: 11, color: '#9CA3AF', fontWeight: '500', textAlign: 'center', marginTop: 2 },
+
+  // Multiplier picker row
+  multiplierBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 10, paddingHorizontal: 12, backgroundColor: '#F9FAFB', borderTopWidth: 1, borderTopColor: '#F3F4F6' },
+  multiplierLabel: { fontSize: 12, fontWeight: '600', color: '#6B7280', marginRight: 4 },
+  multiplierBtn: { paddingVertical: 7, paddingHorizontal: 14, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  multiplierPresent: { backgroundColor: '#D1FAE5' },
+  multiplierAbsent: { backgroundColor: '#FEE2E2' },
+  multiplierBtnText: { fontSize: 14, fontWeight: '800', color: '#1F2937' },
+  multiplierCancel: { padding: 6, marginLeft: 4 },
+
+  // Custom count input
+  customInputWrap: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  customInput: { width: 36, height: 32, borderRadius: 8, textAlign: 'center', fontSize: 14, fontWeight: '800', color: '#1F2937', paddingVertical: 0 },
+  customConfirm: { padding: 4, backgroundColor: '#ECFDF5', borderRadius: 8 },
 
   fab: { position: 'absolute', width: 60, height: 60, alignItems: 'center', justifyContent: 'center', right: 20, bottom: 25, backgroundColor: '#10B981', borderRadius: 30, ...Platform.select({ ios: { shadowColor: '#10B981', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 5 }, android: { elevation: 6 } }) },
 

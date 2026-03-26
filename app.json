@@ -1,8 +1,8 @@
 {
   "expo": {
-    "name": "btech-sync",
+    "name": "Attendance Sync",
     "slug": "btech-sync-sameer-2026",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",

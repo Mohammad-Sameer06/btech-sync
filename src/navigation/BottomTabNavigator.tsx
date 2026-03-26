@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import HomeScreen from '../screens/HomeScreen';
 import TimetableScreen from '../screens/TimetableScreen';
+import BunkCalculatorScreen from '../screens/BunkCalculatorScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 
 const Tab = createBottomTabNavigator();
@@ -33,6 +34,8 @@ export default function BottomTabNavigator() {
             iconName = focused ? 'checkmark-circle' : 'checkmark-circle-outline';
           } else if (route.name === 'Timetable') {
             iconName = focused ? 'calendar' : 'calendar-outline';
+          } else if (route.name === 'Calculator') {
+            iconName = focused ? 'calculator' : 'calculator-outline';
           } else if (route.name === 'Settings') {
             iconName = focused ? 'settings' : 'settings-outline';
           }
@@ -43,6 +46,7 @@ export default function BottomTabNavigator() {
     >
       <Tab.Screen name="Attendance" component={HomeScreen} />
       <Tab.Screen name="Timetable" component={TimetableScreen} />
+      <Tab.Screen name="Calculator" component={BunkCalculatorScreen} />
       <Tab.Screen name="Settings" component={SettingsScreen} />
     </Tab.Navigator>
   );

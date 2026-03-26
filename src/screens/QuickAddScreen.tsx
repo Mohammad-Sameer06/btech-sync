@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, FlatList,
-  Alert, ActivityIndicator, Platform, SectionList,
+  ActivityIndicator, Platform, SectionList,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getActiveProfile, getActiveProfileId, scopedKey } from '../utils/profileService';
 import { BRANCH_SUBJECTS, PresetSubject } from '../data/subjectPresets';
+import { useCustomAlert } from '../components/CustomAlert';
 
 type Props = { navigation: any };
 
@@ -19,6 +20,7 @@ const BASE_TIMETABLE_KEY = '@timetable_data';
 
 export default function QuickAddScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
+  const { showAlert, CustomAlert } = useCustomAlert();
   const [items, setItems] = useState<SelectableSubject[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -87,7 +89,7 @@ export default function QuickAddScreen({ navigation }: Props) {
   const handleAdd = async () => {
     const selected = items.filter(i => i.selected);
     if (selected.length === 0) {
-      Alert.alert('Nothing selected', 'Please select at least one subject.');
+      showAlert({ type: 'warning', title: 'Nothing Selected', message: 'Please select at least one subject.' });
       return;
     }
 
@@ -112,13 +114,14 @@ export default function QuickAddScreen({ navigation }: Props) {
         JSON.stringify([...existing, ...newSubjects])
       );
 
-      Alert.alert(
-        `Added ${selected.length} subjects! 🎉`,
-        'All selected subjects are now in your attendance tracker.',
-        [{ text: 'Done', onPress: () => navigation.goBack() }]
-      );
+      showAlert({
+        type: 'success',
+        title: `Added ${selected.length} subject${selected.length !== 1 ? 's' : ''}! 🎉`,
+        message: 'All selected subjects are now in your attendance tracker.',
+        buttons: [{ text: 'Done', onPress: () => navigation.goBack() }],
+      });
     } catch {
-      Alert.alert('Error', 'Failed to save subjects.');
+      showAlert({ type: 'error', title: 'Error', message: 'Failed to save subjects. Please try again.' });
     } finally {
       setIsSaving(false);
     }
@@ -232,6 +235,8 @@ export default function QuickAddScreen({ navigation }: Props) {
           </TouchableOpacity>
         </View>
       )}
+
+      <CustomAlert />
     </View>
   );
 }
